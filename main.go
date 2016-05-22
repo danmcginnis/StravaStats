@@ -44,9 +44,9 @@ func main() {
 		clubName := club.Name
 		id := club.ID
 		fmt.Printf("Fetching info for %s (id number %d)\n", clubName, id)
-		for y := 1; y < 5; y++ {
+		for y := 1; y < 10; y++ {
 			fmt.Println(y)
-            clubInfo, err := strava.NewClubsService(client).ListMembers(id).Page(y).PerPage(100).Do()
+            clubInfo, err := strava.NewClubsService(client).ListMembers(id).Page(y).PerPage(200).Do()
 			if err != nil {
 				panic(err)
 			}
@@ -64,7 +64,7 @@ func main() {
 			}
 			for _, x := range activities {
 				name := x.Athlete.FirstName + " " + x.Athlete.LastName
-				if clubMembers[name] && x.Type == "Run" {
+				if clubMembers[name] && x.Type == strava.ActivityTypes.Run {
 					fmt.Println(x.StartDate, x.Athlete.Id, name, x.Distance, x.MovingTime, x.TotalElevationGain, x.Name)
 				}
 			}
