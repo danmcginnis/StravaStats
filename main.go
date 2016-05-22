@@ -2,10 +2,13 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/strava/go.strava"
 	"io/ioutil"
+	"os"
+	"time"
 )
 
 type configuration struct {
@@ -17,6 +20,9 @@ type configuration struct {
 }
 
 func main() {
+
+	var csvHeader = []string{"Date", "Id", "athleteId", "athleteName", "distance", "movingTime", "wallTime",
+		"totalElevationGain", "achievementCount", "averageSpeed", "maxSpeed", "runName"}
 
 	data, err := ioutil.ReadFile("secrets.json")
 	if err != nil {
@@ -44,30 +50,43 @@ func main() {
 		clubName := club.Name
 		id := club.ID
 		fmt.Printf("Fetching info for %s (id number %d)\n", clubName, id)
-		for y := 1; y < 10; y++ {
-			fmt.Println(y)
-            clubInfo, err := strava.NewClubsService(client).ListMembers(id).Page(y).PerPage(200).Do()
-			if err != nil {
-				panic(err)
-			}
+		clubInfo, err := strava.NewClubsService(client).ListMembers(id).Do()
+		if err != nil {
+			panic(err)
+		}
 
-			//A map since we're going to be looking up membership frequently
-			clubMembers := make(map[string]bool, len(clubInfo))
-			for _, x := range clubInfo {
-				name := x.FirstName + " " + x.LastName
-				clubMembers[name] = true
-			}
-			//Get mine and friends activities
-			activities, err := service.ListFriendsActivities().PerPage(100).Do()
-			if err != nil {
-				panic(err)
-			}
-			for _, x := range activities {
-				name := x.Athlete.FirstName + " " + x.Athlete.LastName
-				if clubMembers[name] && x.Type == strava.ActivityTypes.Run {
-					fmt.Println(x.StartDate, x.Athlete.Id, name, x.Distance, x.MovingTime, x.TotalElevationGain, x.Name)
-				}
+		//A map since we're going to be looking up membership frequently
+		clubMembers := make(map[string]bool, len(clubInfo))
+		for _, x := range clubInfo {
+			name := x.FirstName + " " + x.LastName
+			clubMembers[name] = true
+		}
+		//Get mine and friends activities. No need to use page here since we're capped at 200 results.
+		activities, err := service.ListFriendsActivities().PerPage(200).Do()
+		if err != nil {
+			panic(err)
+		}
+		t := time.Now().Format(time.RFC3339)
+		csvFile, err := os.Create(t + ".csv")
+		if err != nil {
+			panic(err)
+		}
+		defer csvFile.Close()
+		writer := csv.NewWriter(csvFile)
+
+		writer.Write(csvHeader)
+
+		for _, x := range activities {
+			name := x.Athlete.FirstName + " " + x.Athlete.LastName
+			if clubMembers[name] && x.Type == strava.ActivityTypes.Run {
+				var line = []string{fmt.Sprintf("%v", x.StartDate), fmt.Sprintf("%d", x.Id),
+					fmt.Sprintf("%d", x.Athlete.Id), name, fmt.Sprintf("%f", x.Distance),
+					fmt.Sprintf("%v", x.MovingTime), fmt.Sprintf("%v", x.ElapsedTime),
+					fmt.Sprintf("%f", x.TotalElevationGain), fmt.Sprintf("%d", x.AchievementCount),
+					fmt.Sprintf("%f", x.AverageSpeed), fmt.Sprintf("%f", x.MaximunSpeed), x.Name}
+				writer.Write(line)
 			}
 		}
+		writer.Flush()
 	}
 }
