@@ -37,7 +37,6 @@ func main() {
 	}
 
 	client := strava.NewClient(conf.APIKey)
-	service := strava.NewCurrentAthleteService(client)
 
 	//Get info about me.
 	//athlete, err := service.Get().Do()
@@ -62,12 +61,25 @@ func main() {
 			clubMembers[name] = true
 		}
 		//Get mine and friends activities. No need to use page here since we're capped at 200 results.
-		activities, err := service.ListFriendsActivities().PerPage(200).Do()
+		service := strava.NewCurrentAthleteService(client)
+		friendActivities, err := service.ListFriendsActivities().PerPage(200).Do()
 		if err != nil {
 			panic(err)
 		}
+
+		//Get the club activities. There's going to be overlap, but this should get us the best spread
+		// of data around Strava's API limits. It's easy enough to deal with duplicate data in CSV files.
+		clubService := strava.NewClubsService(client)
+		clubActivities, err := clubService.ListActivities(id).PerPage(200).Do()
+		if err != nil {
+			panic(err)
+		}
+
+		everything := [2][]*strava.ActivitySummary{friendActivities, clubActivities}
+
 		t := time.Now().Format(time.RFC3339)
-		csvFile, err := os.Create(t + ".csv")
+		csvFileName := t + "_" + clubName + ".csv"
+		csvFile, err := os.Create(csvFileName)
 		if err != nil {
 			panic(err)
 		}
@@ -76,17 +88,21 @@ func main() {
 
 		writer.Write(csvHeader)
 
-		for _, x := range activities {
-			name := x.Athlete.FirstName + " " + x.Athlete.LastName
-			if clubMembers[name] && x.Type == strava.ActivityTypes.Run {
-				var line = []string{fmt.Sprintf("%v", x.StartDate), fmt.Sprintf("%d", x.Id),
-					fmt.Sprintf("%d", x.Athlete.Id), name, fmt.Sprintf("%f", x.Distance),
-					fmt.Sprintf("%v", x.MovingTime), fmt.Sprintf("%v", x.ElapsedTime),
-					fmt.Sprintf("%f", x.TotalElevationGain), fmt.Sprintf("%d", x.AchievementCount),
-					fmt.Sprintf("%f", x.AverageSpeed), fmt.Sprintf("%f", x.MaximunSpeed), x.Name}
-				writer.Write(line)
+		for _, activities := range everything {
+			for _, x := range activities {
+				name := x.Athlete.FirstName + " " + x.Athlete.LastName
+				if clubMembers[name] && x.Type == strava.ActivityTypes.Run {
+					var line = []string{fmt.Sprintf("%v", x.StartDate), fmt.Sprintf("%d", x.Id),
+						fmt.Sprintf("%d", x.Athlete.Id), name, fmt.Sprintf("%f", x.Distance),
+						fmt.Sprintf("%v", x.MovingTime), fmt.Sprintf("%v", x.ElapsedTime),
+						fmt.Sprintf("%f", x.TotalElevationGain), fmt.Sprintf("%d", x.AchievementCount),
+						fmt.Sprintf("%f", x.AverageSpeed), fmt.Sprintf("%f", x.MaximunSpeed), x.Name}
+					writer.Write(line)
+				}
 			}
 		}
+
 		writer.Flush()
+		fmt.Println("Results written to", csvFileName)
 	}
 }
