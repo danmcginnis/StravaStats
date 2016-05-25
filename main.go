@@ -78,17 +78,24 @@ func main() {
 		everything := [2][]*strava.ActivitySummary{friendActivities, clubActivities}
 
 		t := time.Now().Format(time.RFC3339)
-		csvFileName := t + "_" + clubName + ".csv"
-		csvFile, err := os.Create(csvFileName)
-		if err != nil {
-			panic(err)
-		}
-		defer csvFile.Close()
-		writer := csv.NewWriter(csvFile)
 
-		writer.Write(csvHeader)
+		for y, activities := range everything {
+			name := ""
+			if y == 0 {
+				name = "friends"
+			} else {
+				name = "entire_club"
+			}
+			csvFileName := t + "_" + clubName + "_" + name + ".csv"
+			csvFile, err := os.Create(csvFileName)
+			if err != nil {
+				panic(err)
+			}
+			defer csvFile.Close()
+			writer := csv.NewWriter(csvFile)
 
-		for _, activities := range everything {
+			writer.Write(csvHeader)
+
 			for _, x := range activities {
 				name := x.Athlete.FirstName + " " + x.Athlete.LastName
 				if clubMembers[name] && x.Type == strava.ActivityTypes.Run {
@@ -100,9 +107,8 @@ func main() {
 					writer.Write(line)
 				}
 			}
+			writer.Flush()
+			fmt.Println("Results written to", csvFileName)
 		}
-
-		writer.Flush()
-		fmt.Println("Results written to", csvFileName)
 	}
 }
